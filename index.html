@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Job Overview</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDq_i-f3-LE9fK8fIlNU4SeAQrqnm5iaqY"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f5f7fa;
+      color: #333;
+    }
+    header {
+      background-color: #007bff;
+      color: white;
+      padding: 20px;
+      text-align: center;
+      font-size: 1.5em;
+    }
+    #map {
+      height: 50vh;
+      width: 100%;
+    }
+    #jobs {
+      padding: 20px;
+    }
+    .job-card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      margin-bottom: 20px;
+      overflow: hidden;
+      transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+      display: flex;
+      flex-direction: column;
+    }
+    .job-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+    }
+    .job-header {
+      background-color: #007bff;
+      color: white;
+      padding: 15px;
+      font-size: 1.2em;
+      display: flex;
+      align-items: center;
+    }
+    .job-header .icon {
+      margin-right: 10px;
+    }
+    .job-body {
+      padding: 15px;
+      flex-grow: 1;
+    }
+    .job-body p {
+      margin: 0;
+      padding: 5px 0;
+    }
+    .navigate-btn {
+      display: block;
+      text-align: center;
+      background-color: #28a745;
+      color: white;
+      padding: 10px;
+      text-decoration: none;
+      border-radius: 0 0 12px 12px;
+      transition: background-color 0.3s ease-in-out;
+    }
+    .navigate-btn:hover {
+      background-color: #218838;
+    }
+    .countdown {
+      font-size: 0.9em;
+      color: #ff0000;
+      margin-top: 10px;
+    }
+    @media (max-width: 768px) {
+      #map {
+        height: 40vh;
+      }
+      .job-card {
+        margin-bottom: 15px;
+      }
+    }
+  </style>
+  <script>
+    const sheetId = 'AIzaSyC_48xAM9OEEwcFkbh6Ckk-OOe4PFVCem8'; // Replace with your Google Sheet ID
+    const range = 'Sheet1!A1:L'; // Adjust the range as needed
+    const apiKey = 'AIzaSyBd2r9-I8495D3lCTA4nzmSjTJ2NTLbfu0'; // Replace with your Google Sheets API key
+
+    function fetchData() {
+      return fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}?key=${apiKey}`)
+        .then(response => response.json())
+        .then(data => {
+          const rows = data.values;
+          const jobs = rows.slice(1).map(row => ({
+            orderTime: row[0],
+            address: row[1],
+            navigationLink: row[2],
+            orderID: row[3],
+            houseSize: row[4],
+            clientName: row[5],
+            company: row[6],
+            message: row[7],
+            products: row[8],
+            contacts: [
+              { name: row[9], phone: row[10] },
+              { name: row[11], phone: row[12] }
+            ]
+          }));
+          return jobs;
+        });
+    }
+
+    function displayJobs(jobs) {
+      const jobList = document.getElementById('jobs');
+      jobs.forEach((job, index) => {
+        const jobElement = document.createElement('div');
+        jobElement.className = 'job-card';
+        jobElement.innerHTML = `
+          <div class="job-header">
+            <i class="fas fa-briefcase icon"></i> ${job.orderTime} - ${job.clientName}
+          </div>
+          <div class="job-body">
+            <p><strong>Address:</strong> <a href="${job.navigationLink}" target="_blank">${job.address}</a></p>
+            <p><strong>Order ID:</strong> ${job.orderID}</p>
+            <p><strong>House Size:</strong> ${job.houseSize}</p>
+            <p><strong>Client:</strong> ${job.clientName}</p>
+            <p><strong>Company:</strong> ${job.company}</p>
+            <p><strong>Message:</strong> ${job.message}</p>
+            <p><strong>Products:</strong> ${job.products}</p>
+            <p><strong>Contacts:</strong></p>
+            <ul>
+              ${job.contacts.map(contact => `<li>${contact.name} - ${contact.phone}</li>`).join('')}
+            </ul>
+            <p class="countdown" id="countdown-${index}"></p>
+          </div>
+          <a href="javascript:void(0)" onclick="navigateToJob('${job.address}')" class="navigate-btn"><i class="fas fa-directions"></i> Navigate</a>
+        `;
+        jobList.appendChild(jobElement);
+        updateCountdown(job.orderTime, `countdown-${index}`);
+      });
+    }
+
+    function initialize() {
+      const mapOptions = {
+        center: new google.maps.LatLng(55.6761, 12.5683), // Center the map at Copenhagen
+        zoom: 10,
+      };
+      const map = new google.maps.Map(document.getElementById('map'), mapOptions);
+      const bounds = new google.maps.LatLngBounds();
+
+      // Current location marker
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(position => {
+          const currentLocation = new google.maps.LatLng(position.coords.latitude, position.coords.longitude);
+          const marker = new google.maps.Marker({
+            position: currentLocation,
+            map: map,
+            title: 'Your Location'
+          });
+          bounds.extend(currentLocation);
+          map.fitBounds(bounds);
+        });
+      }
+
+      // Fetch and display jobs
+      fetchData().then(displayJobs).catch(error => {
+        console.error('Error fetching job data:', error);
+      });
+    }
+
+    function updateCountdown(orderTime, elementId) {
+      const orderTimeParts = orderTime.split(':');
+      const orderDate = new Date();
+      orderDate.setHours(orderTimeParts[0], orderTimeParts[1], 0, 0);
+
+      function update() {
+        const now = new Date();
+        const diff = orderDate - now;
+
+        const hours = Math.floor(diff / 1000 / 60 / 60);
+        const minutes = Math.floor((diff / 1000 / 60) % 60);
+        const seconds = Math.floor((diff / 1000) % 60);
+
+        const countdownText = diff > 0
+          ? `Time left: ${hours}h ${minutes}m ${seconds}s`
+          : `Running late by: ${Math.abs(hours)}h ${Math.abs(minutes)}m ${Math.abs(seconds)}s`;
+
+        document.getElementById(elementId).textContent = countdownText;
+      }
+
+      setInterval(update, 1000);
+      update();
+    }
+
+    function navigateToJob(address) {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(position => {
+          const startLat = position.coords.latitude;
+          const startLng = position.coords.longitude;
+          const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${startLat},${startLng}&destination=${encodeURIComponent(address)}&travelmode=driving`;
+          window.open(googleMapsUrl, '_blank');
+        });
+      } else {
+        alert("Geolocation is not supported by this browser.");
+      }
+    }
+
+    window
